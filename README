@@ -1,0 +1,9 @@
+A set of Racket scripts for a DNS server and clients requesting DDNS service.
+
+The server script accepts HTTP PUT requests and passes the data to nsupdate.
+
+The client script sends an HTTP PUT to the server.
+
+The reason you'd do this is when the client doesn't know its own IP address, i.e. whenever it's behind a NAT router.
+
+The reason you'd use this specific method (rather than, say, scraping whatismyip.org and running nsupdate yourself) is because the server gets your IP address just by you contacting it, so there is no need to depend on an external service.
