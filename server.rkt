@@ -22,9 +22,11 @@
 (define dns-server "ns1.lutrasoft.com")
 (define dns-zone "lutrasoft.com")
 
+(define request-regex #px"^(\\w+) ([^\r\n]+)\r?\n")
+
 ; Initial handler for TCP connections
 (define (tcp-handler input output)
-  (let [(header-match (regexp-match #px"^(\\w+) ([^\r\n]+)\r?\n" input))]
+  (let [(header-match (regexp-try-match request-regex input))]
     (if header-match
        (let [(method (bytes->string/locale (list-ref header-match 1)))]
          (if (string=? (string-upcase method) "PUT")
@@ -59,18 +61,21 @@
          #:record record
          #:ip ip)
   (let-values ([(subprocess-ref stdout stdin stderr) (subprocess #f #f #f "/usr/bin/nsupdate" "-k" key-file "-v")])
-    (fprintf stdin "server ~a\n" server)
-    (fprintf stdin "zone ~a\n" zone)
-    (fprintf stdin "key ~a ~a\n" keyn keys)
-    (fprintf stdin "update delete ~a A\n" record)
-    (fprintf stdin "update add ~a 3600 A ~a\n" record ip)
-    (flush-output stdin)
-    (close-output-port stdin)
-    (sync/timeout 2 subprocess-ref)
-    (let [(retval (port->string stdout))
-          (reterr (port->string stderr))]
-      (map close-input-port (list stdout stderr))
-      (if (string=? reterr "") retval (error 'nsupdate "Error from nsupdate: ~a" reterr)))))
+    (if (eq? (subprocess-status subprocess-ref) 'running)
+      (begin
+        (fprintf stdin "server ~a\n" server)
+        (fprintf stdin "zone ~a\n" zone)
+        (fprintf stdin "key ~a ~a\n" keyn keys)
+        (fprintf stdin "update delete ~a A\n" record)
+        (fprintf stdin "update add ~a 3600 A ~a\n" record ip)
+        (flush-output stdin)
+        (close-output-port stdin)
+        (sync/timeout 2 subprocess-ref)
+        (let [(retval (port->string stdout))
+              (reterr (port->string stderr))]
+          (map close-input-port (list stdout stderr))
+          (if (string=? reterr "") retval (error 'nsupdate "Error from nsupdate: ~a" reterr))))
+      (error 'run-nsupdate "nsupdate exited with code ~a" (subprocess-status subprocess-ref)))))
 
 ; Start a listener loop
 (define (listen-loop listener)
